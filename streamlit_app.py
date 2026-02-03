@@ -1,266 +1,92 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8" />
-  <title>공시지가 대비 매매호가 계산기</title>
+import streamlit as st
+import math
 
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f4f6f8;
-      padding: 40px;
-    }
+st.set_page_config(page_title="공시지가 대비 매매호가 계산기", layout="centered")
 
-    .calculator {
-      max-width: 520px;
-      margin: auto;
-      background: #fff;
-      padding: 24px;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-    }
+st.title("🏗️ 공시지가 대비 매매호가 계산기")
 
-    h1 {
-      font-size: 20px;
-      margin-bottom: 20px;
-      text-align: center;
-    }
+# ===== 입력 =====
+land_price = st.text_input("공시지가 (원 / ㎡)", placeholder="예: 5,000,000")
+land_area = st.text_input("토지면적", placeholder="면적 입력")
+unit = st.radio("면적 단위", ["㎡", "평"], horizontal=True)
+sale_price_eok = st.text_input("현재 매매호가 (억원)", placeholder="예: 18")
 
-    .field {
-      margin-bottom: 16px;
-    }
+# ===== 숫자 처리 함수 =====
+def parse_number(value):
+    try:
+        return float(value.replace(",", ""))
+    except:
+        return None
 
-    .field label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 6px;
-      color: #333;
-    }
+def format_won(value):
+    sign = "+" if value >= 0 else "-"
+    value = abs(value)
 
-    .field input {
-      width: 100%;
-      padding: 10px;
-      font-size: 15px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-    }
+    eok = int(value // 100_000_000)
+    man = int((value % 100_000_000) // 10_000)
 
-    .unit-select {
-      display: flex;
-      gap: 12px;
-      margin-top: 8px;
-      font-size: 14px;
-    }
+    result = ""
+    if eok > 0:
+        result += f"{eok}억 "
+    if man > 0:
+        result += f"{man:,}만원"
 
-    button {
-      width: 100%;
-      padding: 14px;
-      font-size: 16px;
-      background: #2563eb;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
+    return sign + result
 
-    button:hover {
-      background: #1e4fd6;
-    }
+# ===== 계산 =====
+if st.button("계산하기"):
+    land_price = parse_number(land_price)
+    land_area = parse_number(land_area)
+    sale_price_eok = parse_number(sale_price_eok)
 
-    .result {
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #eee;
-    }
+    if not land_price or not land_area or not sale_price_eok:
+        st.error("모든 값을 올바르게 입력해주세요.")
+    else:
+        # 토지가치 계산
+        land_value = (
+            land_price * land_area
+            if unit == "㎡"
+            else land_price * 3.3058 * land_area
+        )
 
-    .hidden {
-      display: none;
-    }
+        sale_value = sale_price_eok * 100_000_000
+        diff = sale_value - land_value
+        ratio = (sale_value / land_value) * 100
 
-    .result p {
-      font-size: 15px;
-      margin: 6px 0;
-    }
+        st.divider()
 
-    .positive {
-      color: #dc2626;
-      font-weight: 600;
-    }
+        st.subheader("📊 계산 결과")
 
-    .negative {
-      color: #2563eb;
-      font-weight: 600;
-    }
+        st.write(f"**공시지가 기준 토지가치:** {format_won(land_value)}")
+        st.write(f"**현재 매매호가:** {sale_price_eok}억")
 
-    /* 배터리 블럭 */
-    .battery {
-      display: flex;
-      gap: 6px;
-      margin: 16px 0 8px;
-    }
+        if diff >= 0:
+            st.markdown(f"**차이:** :red[{format_won(diff)}]")
+        else:
+            st.markdown(f"**차이:** :blue[{format_won(diff)}]")
 
-    .block {
-      width: 32px;
-      height: 20px;
-      border-radius: 4px;
-      background: #e5e7eb;
-    }
+        st.write(f"**공시지가 대비:** {ratio:.1f}%")
 
-    .ratio-text {
-      font-size: 14px;
-      font-weight: bold;
-    }
+        # ===== 배터리형 시각화 =====
+        st.subheader("🔋 공시지가 대비 프리미엄 체감도")
 
-    .warning {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #dc2626;
-      font-weight: 600;
-    }
-  </style>
-</head>
+        max_blocks = 10
+        filled_blocks = min(round((ratio / 200) * max_blocks), max_blocks)
 
-<body>
-  <div class="calculator">
-    <h1>공시지가 대비 매매호가 계산기</h1>
+        cols = st.columns(max_blocks)
 
-    <!-- 입력 -->
-    <div class="field">
-      <label>공시지가 (원 / ㎡)</label>
-      <input type="text" placeholder="예: 5,000,000" />
-    </div>
+        for i in range(max_blocks):
+            if i < filled_blocks:
+                if ratio <= 100:
+                    color = "🟩"
+                elif ratio <= 150:
+                    color = "🟨"
+                else:
+                    color = "🟥"
+            else:
+                color = "⬜"
 
-    <div class="field">
-      <label>토지면적</label>
-      <input type="text" placeholder="면적 입력" />
-      <div class="unit-select">
-        <label><input type="radio" name="unit" checked /> ㎡</label>
-        <label><input type="radio" name="unit" /> 평</label>
-      </div>
-    </div>
+            cols[i].markdown(f"<div style='text-align:center;font-size:24px'>{color}</div>", unsafe_allow_html=True)
 
-    <div class="field">
-      <label>현재 매매호가 (억원)</label>
-      <input type="text" placeholder="예: 18" />
-    </div>
-
-    <button>계산하기</button>
-
-    <!-- 결과 -->
-    <div class="result hidden">
-      <p>공시지가 기준 토지가치: <strong id="landValue"></strong></p>
-      <p>현재 매매호가: <strong id="saleValue"></strong></p>
-      <p>차이: <strong id="diffValue"></strong></p>
-
-      <div class="battery">
-        <div class="block"></div><div class="block"></div><div class="block"></div>
-        <div class="block"></div><div class="block"></div><div class="block"></div>
-        <div class="block"></div><div class="block"></div><div class="block"></div>
-        <div class="block"></div>
-      </div>
-
-      <div class="ratio-text" id="ratioText"></div>
-      <div class="warning" id="warningText"></div>
-    </div>
-  </div>
-
-  <!-- JavaScript -->
-  <script>
-    const button = document.querySelector("button");
-    const resultBox = document.querySelector(".result");
-
-    button.addEventListener("click", () => {
-      const inputs = document.querySelectorAll("input[type='text']");
-      const landPrice = parseNumber(inputs[0].value);
-      const landArea = parseNumber(inputs[1].value);
-      const salePriceEok = parseNumber(inputs[2].value);
-
-      const unit = document.querySelector("input[name='unit']:checked")
-        .parentElement.textContent.trim();
-
-      if (!landPrice || !landArea || !salePriceEok) {
-        alert("모든 값을 입력해주세요.");
-        return;
-      }
-
-      // 토지가치 계산
-      const landValue =
-        unit === "㎡"
-          ? landPrice * landArea
-          : landPrice * 3.3058 * landArea;
-
-      // 매매호가 (억원 → 원)
-      const saleValue = salePriceEok * 100000000;
-
-      // 차이 / 괴리율
-      const diff = saleValue - landValue;
-      const ratio = (saleValue / landValue) * 100;
-
-      // 결과 표시
-      resultBox.classList.remove("hidden");
-
-      document.getElementById("landValue").innerText = formatWon(landValue);
-      document.getElementById("saleValue").innerText = salePriceEok + "억";
-
-      const diffEl = document.getElementById("diffValue");
-      diffEl.innerText = formatWon(diff);
-      diffEl.className = diff >= 0 ? "positive" : "negative";
-
-      document.getElementById("ratioText").innerText =
-        `공시지가 대비 ${ratio.toFixed(1)}%`;
-
-      updateBattery(ratio);
-      updateWarning(ratio);
-    });
-
-    function parseNumber(value) {
-      return Number(value.replace(/,/g, ""));
-    }
-
-    function formatWon(value) {
-      const abs = Math.abs(value);
-      const eok = Math.floor(abs / 100000000);
-      const man = Math.floor((abs % 100000000) / 10000);
-
-      let text = "";
-      if (eok > 0) text += `${eok}억 `;
-      if (man > 0) text += `${man.toLocaleString()}만원`;
-
-      return (value >= 0 ? "+" : "-") + text;
-    }
-
-    function updateBattery(ratio) {
-      const blocks = document.querySelectorAll(".block");
-      const max = blocks.length;
-      let filled = Math.round((ratio / 200) * max);
-      filled = Math.min(filled, max);
-
-      blocks.forEach((block, i) => {
-        if (i < filled) {
-          if (ratio <= 100) block.style.background = "#22c55e";
-          else if (ratio <= 150) block.style.background = "#facc15";
-          else block.style.background = "#ef4444";
-        } else {
-          block.style.background = "#e5e7eb";
-        }
-      });
-    }
-
-    function updateWarning(ratio) {
-      const warning = document.getElementById("warningText");
-      warning.innerText =
-        ratio > 200 ? "⚠ 공시지가 대비 과도한 프리미엄 구간입니다." : "";
-    }
-
-    // 입력 시 콤마 자동
-    document.querySelectorAll("input[type='text']").forEach(input => {
-      input.addEventListener("input", () => {
-        input.value = input.value
-          .replace(/,/g, "")
-          .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-      });
-    });
-  </script>
-</body>
-</html>
+        if ratio > 200:
+            st.warning("⚠ 공시지가 대비 과도한 프리미엄 구간입니다.")
